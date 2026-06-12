@@ -1,0 +1,6 @@
+@SystemUznawaniaPrzychodow_HostAddress = http://localhost:5056
+
+GET {{SystemUznawaniaPrzychodow_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
