@@ -11,6 +11,7 @@ public class SubscriptionConfiguration : IEntityTypeConfiguration<Subscription>
         builder.ToTable("Subscriptions");
 
         builder.HasKey(s => s.SubscriptionId);
+        builder.Property(s => s.SubscriptionName).IsRequired().HasMaxLength(100);
         builder.Property(s => s.RenewalPeriod).IsRequired();
         builder.Property(s => s.RenewalAmount).IsRequired().HasColumnType("decimal(18,2)");
         builder.Property(s => s.IsActive).IsRequired().HasColumnType("bit");

@@ -5,6 +5,7 @@ public class Subscription
     public int SubscriptionId { get; set; }
     public int ClientId { get; set; }
     public int SoftwareId { get; set; }
+    public string SubscriptionName { get; set; } = string.Empty;
     public int RenewalPeriod { get; set; }
     public decimal RenewalAmount { get; set; }
     public bool IsActive { get; set; }
