@@ -30,9 +30,11 @@ builder.Services.AddOpenApi();
 //     });
 // builder.Services.AddAuthorization();
 
+builder.Services.AddHttpClient<CurrencyService>();
 builder.Services.AddScoped<IClientService, ClientService>();
 builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IRevenueService, RevenueService>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
