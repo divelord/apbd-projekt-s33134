@@ -12,7 +12,7 @@ using SystemUznawaniaPrzychodow.Data;
 namespace SystemUznawaniaPrzychodow.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260613105118_Init")]
+    [Migration("20260614112601_Init")]
     partial class Init
     {
         /// <inheritdoc />
@@ -263,6 +263,11 @@ namespace SystemUznawaniaPrzychodow.Migrations
 
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
+
+                    b.Property<string>("SubscriptionName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("SubscriptionId");
 

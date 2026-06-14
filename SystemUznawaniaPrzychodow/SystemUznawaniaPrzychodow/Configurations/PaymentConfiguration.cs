@@ -19,5 +19,56 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .WithMany(c => c.Payments)
             .HasForeignKey(p => p.ContractId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasData(
+            new Payment
+            {
+                PaymentId = 1,
+                ContractId = 1,
+                Amount = 5000.00m,
+                PaymentDate = new DateOnly(2026, 01, 20),
+                IsRefunded = false
+            },
+            new Payment
+            {
+                PaymentId = 2,
+                ContractId = 2,
+                Amount = 4000.00m,
+                PaymentDate = new DateOnly(2026, 02, 15),
+                IsRefunded = false
+            },
+            new Payment
+            {
+                PaymentId = 3,
+                ContractId = 2,
+                Amount = 4000.00m,
+                PaymentDate = new DateOnly(2026, 02, 20),
+                IsRefunded = false
+            },
+            new Payment
+            {
+                PaymentId = 4,
+                ContractId = 3,
+                Amount = 3000.00m,
+                PaymentDate = new DateOnly(2026, 05, 05),
+                IsRefunded = false
+            },
+            new Payment
+            {
+                PaymentId = 5,
+                ContractId = 1,
+                Amount = 5000.00m,
+                PaymentDate = new DateOnly(2026, 01, 21),
+                IsRefunded = true
+            },
+            new Payment
+            {
+                PaymentId = 6,
+                ContractId = 3,
+                Amount = 1500.00m,
+                PaymentDate = new DateOnly(2026, 05, 06),
+                IsRefunded = true
+            }
+        );
     }
 }
