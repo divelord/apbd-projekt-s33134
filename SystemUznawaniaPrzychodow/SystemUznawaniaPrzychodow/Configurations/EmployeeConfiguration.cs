@@ -21,14 +21,14 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
             {
                 EmployeeId = 1,
                 Login = "admin",
-                PasswordHash = "$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+                PasswordHash = "admin123",
                 Role = "Admin"
             },
             new Employee
             {
                 EmployeeId = 2,
                 Login = "user",
-                PasswordHash = "$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+                PasswordHash = "user123",
                 Role = "User"
             }
         );
