@@ -44,7 +44,7 @@ public class CurrencyService
         {
             var response = await _httpClient.GetFromJsonAsync<NbpResponse>(link);
 
-            return response?.Rates?.FirstOrDefault()?.Mid;
+            return response?.Rates.FirstOrDefault()?.Mid;
         }
         catch (Exception)
         {

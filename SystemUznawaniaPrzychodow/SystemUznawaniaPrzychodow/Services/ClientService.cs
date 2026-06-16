@@ -17,11 +17,13 @@ public class ClientService : IClientService
 
     public async Task CreateIndividualClientAsync(CreateIndividualClientDto dto)
     {
-        var clientExists = await _dbContext.IndividualClients.AnyAsync(x => x.Pesel == dto.Pesel);
+        // walidacja => czy klient o podanym PESELu istnieje w bazie
+        var clientExists = await _dbContext.IndividualClients
+            .AnyAsync(x => x.Pesel == dto.Pesel);
 
         if (clientExists)
         {
-            throw new ConflictException("Individual client with this Pesel already exists");
+            throw new ConflictException($"Client with Pesel {dto.Pesel} already exists");
         }
 
         var individualClient = new IndividualClient
@@ -40,11 +42,13 @@ public class ClientService : IClientService
 
     public async Task CreateCompanyClientAsync(CreateCompanyClientDto dto)
     {
-        var clientExists = await _dbContext.CompanyClients.AnyAsync(x => x.Krs == dto.Krs);
+        // walidacja => czy firma o podanym numerze KRS istnieje w bazie
+        var clientExists = await _dbContext.CompanyClients
+            .AnyAsync(x => x.Krs == dto.Krs);
 
         if (clientExists)
         {
-            throw new ConflictException("Company client with this KRS already exists");
+            throw new ConflictException($"Company with KRS {dto.Krs} already exists");
         }
 
         var companyClient = new CompanyClient
@@ -62,11 +66,13 @@ public class ClientService : IClientService
 
     public async Task UpdateIndividualClientAsync(int id, UpdateIndividualClientDto dto)
     {
-        var individualClient = await _dbContext.IndividualClients.FirstOrDefaultAsync(x => x.ClientId == id);
+        // walidacja => czy podany klient istnieje w bazie
+        var individualClient = await _dbContext.IndividualClients
+            .FirstOrDefaultAsync(x => x.ClientId == id);
 
         if (individualClient == null)
         {
-            throw new NotFoundException("Individual client with this ID not found");
+            throw new NotFoundException($"Client with ID {id} not found");
         }
 
         individualClient.FirstName = dto.FirstName;
@@ -80,11 +86,13 @@ public class ClientService : IClientService
 
     public async Task UpdateCompanyClientAsync(int id, UpdateCompanyClientDto dto)
     {
-        var companyClient = await _dbContext.CompanyClients.FirstOrDefaultAsync(x => x.ClientId == id);
+        // walidacja => czy podany klient istnieje w bazie
+        var companyClient = await _dbContext.CompanyClients
+            .FirstOrDefaultAsync(x => x.ClientId == id);
 
         if (companyClient == null)
         {
-            throw new NotFoundException("Company client with this ID not found");
+            throw new NotFoundException($"Client with ID {id} not found");
         }
 
         companyClient.CompanyName = dto.CompanyName;
@@ -97,25 +105,29 @@ public class ClientService : IClientService
 
     public async Task DeleteIndividualClientAsync(int id)
     {
+        // walidacja => czy podany klient istnieje w bazie
         var client = await _dbContext.Clients
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.ClientId == id);
 
         if (client == null)
         {
-            throw new NotFoundException("Individual client with this ID not found");
+            throw new NotFoundException($"Client with ID {id} not found");
         }
 
+        // walidacja => czy podano klienta jako firma
         if (client is CompanyClient)
         {
             throw new ConflictException("Company's data cannot be deleted");
         }
 
+        // walidacja => czy podano klienta jako osoba fizyczna
         if (client is IndividualClient individualClient)
         {
+            // walidacja => czy podany klient nie został już usunięty
             if (individualClient.IsDeleted)
             {
-                throw new ConflictException("This individual client is already deleted");
+                throw new ConflictException("This client is already deleted");
             }
 
             individualClient.FirstName = "DELETED";

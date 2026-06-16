@@ -18,7 +18,7 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
         builder.HasOne(p => p.Contract)
             .WithMany(c => c.Payments)
             .HasForeignKey(p => p.ContractId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasData(
             new Payment

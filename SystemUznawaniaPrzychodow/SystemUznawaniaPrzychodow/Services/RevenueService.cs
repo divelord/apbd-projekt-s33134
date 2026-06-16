@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SystemUznawaniaPrzychodow.Data;
 using SystemUznawaniaPrzychodow.DTOs;
+using SystemUznawaniaPrzychodow.Exceptions;
 
 namespace SystemUznawaniaPrzychodow.Services;
 
@@ -15,27 +16,20 @@ public class RevenueService : IRevenueService
         _currencyService = currencyService;
     }
 
-    private async Task<decimal> GetCurrentRevenueInPlnAsync(int? softwareId)
-    {
-        var contracts = _dbContext.Contracts.Where(x => x.IsSigned);
-        var subscriptions = _dbContext.SubscriptionRenewals
-            .Include(x => x.Subscription)
-            .Where(x => x.Subscription.IsActive);
-
-        if (softwareId.HasValue)
-        {
-            contracts = contracts.Where(x => x.SoftwareId == softwareId.Value);
-            subscriptions = subscriptions.Where(x => x.Subscription.SoftwareId == softwareId.Value);
-        }
-
-        var contractRevenue = await contracts.SumAsync(x => x.Price);
-        var subscriptionRevenue = await subscriptions.SumAsync(x => x.AmountPaid);
-
-        return contractRevenue + subscriptionRevenue;
-    }
-
     public async Task<GetRevenueResponseDto> GetCurrentRevenueAsync(int? softwareId, string currency)
     {
+        // walidacja => czy istnieje podana subskrypcja w bazie
+        if (softwareId.HasValue)
+        {
+            var software = await _dbContext.Software
+                .FirstOrDefaultAsync(x => x.SoftwareId == softwareId.Value);
+
+            if (software == null)
+            {
+                throw new NotFoundException($"Software with ID {softwareId.Value} not found");
+            }
+        }
+
         var totalRevenue = await GetCurrentRevenueInPlnAsync(softwareId);
         var exchangeRate = await _currencyService.GetExchangeRateAsync(currency);
 
@@ -43,7 +37,7 @@ public class RevenueService : IRevenueService
 
         var revenue = new GetRevenueResponseDto
         {
-            Revenue = Math.Round(totalRevenue /  rateValue, 2),
+            Revenue = Math.Round(totalRevenue / rateValue, 2),
             Currency = currency.ToUpper(),
         };
 
@@ -52,11 +46,24 @@ public class RevenueService : IRevenueService
 
     public async Task<GetRevenueResponseDto> GetExpectedRevenueAsync(int? softwareId, string currency)
     {
+        // walidacja => czy istnieje podana subskrypcja w bazie
+        if (softwareId.HasValue)
+        {
+            var software = await _dbContext.Software
+                .FirstOrDefaultAsync(x => x.SoftwareId == softwareId.Value);
+
+            if (software == null)
+            {
+                throw new NotFoundException($"Software with ID {softwareId.Value} not found");
+            }
+        }
+
         var totalRevenue = await GetCurrentRevenueInPlnAsync(softwareId);
 
         var today = DateOnly.FromDateTime(DateTime.Now);
 
-        var contracts = _dbContext.Contracts.Where(x => !x.IsSigned && x.Deadline >= today);
+        var contracts = _dbContext.Contracts
+            .Where(x => !x.IsSigned && x.Deadline >= today);
         var subscriptions = _dbContext.Subscriptions
             .Include(x => x.Renewals)
             .Where(x => x.IsActive);
@@ -81,7 +88,7 @@ public class RevenueService : IRevenueService
 
             if (currentPeriodEnd >= today)
             {
-                totalRevenue += subscription.RenewalAmount * 0.95m;
+                totalRevenue += subscription.RenewalAmount;
             }
         }
 
@@ -95,5 +102,26 @@ public class RevenueService : IRevenueService
         };
 
         return revenue;
+    }
+
+    // metoda do wyliczenia aktualnego przychodu
+    private async Task<decimal> GetCurrentRevenueInPlnAsync(int? softwareId)
+    {
+        var contracts = _dbContext.Contracts
+            .Where(x => x.IsSigned);
+        var subscriptions = _dbContext.SubscriptionRenewals
+            .Include(x => x.Subscription)
+            .Where(x => x.Subscription.IsActive);
+
+        if (softwareId.HasValue)
+        {
+            contracts = contracts.Where(x => x.SoftwareId == softwareId.Value);
+            subscriptions = subscriptions.Where(x => x.Subscription.SoftwareId == softwareId.Value);
+        }
+
+        var contractRevenue = await contracts.SumAsync(x => x.Price);
+        var subscriptionRevenue = await subscriptions.SumAsync(x => x.AmountPaid);
+
+        return contractRevenue + subscriptionRevenue;
     }
 }

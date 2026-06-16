@@ -18,6 +18,7 @@ public class SubscriptionsController : ControllerBase
         _subscriptionService = subscriptionService;
     }
 
+    // POST /api/subscriptions
     [HttpPost]
     public async Task<IActionResult> CreateSubscription([FromBody] CreateSubscriptionDto dto)
     {
@@ -41,6 +42,7 @@ public class SubscriptionsController : ControllerBase
         }
     }
 
+    // POST /api/subscriptions/{id}/renewals
     [Route("{id:int}/renewals")]
     [HttpPost]
     public async Task<IActionResult> ProcessRenewal(int id, [FromBody] CreateSubscriptionRenewalDto dto)

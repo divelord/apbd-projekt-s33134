@@ -17,30 +17,45 @@ public class ContractService : IContractService
 
     public async Task CreateContractAsync(CreateContractDto dto)
     {
-        var client = await _dbContext.Clients.FirstOrDefaultAsync(x => x.ClientId == dto.ClientId);
+        // walidacja = czy podany klient istnieje w bazie
+        var client = await _dbContext.Clients
+            .FirstOrDefaultAsync(x => x.ClientId == dto.ClientId);
 
         if (client == null)
         {
-            throw new NotFoundException("No client found with the given id");
+            throw new NotFoundException($"Client with ID {dto.ClientId} not found");
         }
 
-        var software = await _dbContext.Software.FirstOrDefaultAsync(x => x.SoftwareId == dto.SoftwareId);
+        // walidacja = czy podane oprogramowanie istnieje w bazie
+        var software = await _dbContext.Software
+            .FirstOrDefaultAsync(x => x.SoftwareId == dto.SoftwareId);
 
         if (software == null)
         {
-            throw new NotFoundException("No software found with the given id");
+            throw new NotFoundException($"Software with ID {dto.SoftwareId} not found");
         }
 
-        var activeSubscription = await _dbContext.Subscriptions
-            .AnyAsync(x => x.ClientId == dto.ClientId
-                           && x.SoftwareId == dto.SoftwareId
-                           && x.IsActive);
-
-        if (activeSubscription)
+        // walidacja => czy data rozpoczęcia jest wcześniej niż data zakończenia
+        if (dto.DateFrom > dto.DateTo)
         {
-            throw new ConflictException("Client has active subscription for this software");
+            throw new BadRequestException("DateFrom must be before DateTo");
         }
 
+        // walidacja => przedział czasowy [3, 30] dni
+        var daysDifference = Math.Abs(dto.DateTo.DayNumber - dto.DateFrom.DayNumber);
+
+        if (daysDifference < 3 || daysDifference > 30)
+        {
+            throw new BadRequestException("Contract period must be between 3 and 30 days");
+        }
+
+        // walidacja => dodatkowy rok wsparcia
+        if (dto.AdditionalSupportYears < 0 || dto.AdditionalSupportYears > 3)
+        {
+            throw new BadRequestException("Additional support can be up to 3 years");
+        }
+
+        // walidacja => czy klient ma już podpisany kontrakt na ten produkt
         var activeContract = await _dbContext.Contracts
             .AnyAsync(x => x.ClientId == dto.ClientId
                            && x.SoftwareId == dto.SoftwareId
@@ -52,22 +67,22 @@ public class ContractService : IContractService
             throw new ConflictException("Client has active contract for this software");
         }
 
-        var daysDifference = Math.Abs(dto.DateTo.DayNumber - dto.DateFrom.DayNumber);
+        // walidacja => czy klient ma już aktywną subskrypcję nna ten produkt
+        var activeSubscription = await _dbContext.Subscriptions
+            .AnyAsync(x => x.ClientId == dto.ClientId
+                           && x.SoftwareId == dto.SoftwareId
+                           && x.IsActive);
 
-        if (daysDifference < 3 || daysDifference > 30)
+        if (activeSubscription)
         {
-            throw new BadRequestException("Contract period must be beetween 3 and 30 days");
+            throw new ConflictException("Client has active subscription for this software");
         }
 
-        if (dto.AdditionalSupportYears < 0 || dto.AdditionalSupportYears > 3)
-        {
-            throw new BadRequestException("Additional support can be up to 3 years");
-        }
-
-        var basePrice = software.AnnualPrice + (dto.AdditionalSupportYears * 1000);
+        var basePrice = software.AnnualPrice;
 
         var today = DateOnly.FromDateTime(DateTime.Now);
 
+        // Wybranie najwyższej zniżki
         var highestDiscount = await _dbContext.Discounts
             .Where(x => x.SoftwareId == dto.SoftwareId
                         && x.Offer == "Contract"
@@ -78,6 +93,7 @@ public class ContractService : IContractService
 
         var discountPercentage = highestDiscount?.Percentage ?? 0;
 
+        // Zniżka dla powracającego klienta
         var isReturningClient =
             await _dbContext.Contracts.AnyAsync(x => x.ClientId == dto.ClientId && x.IsSigned)
             || await _dbContext.Subscriptions.AnyAsync(x => x.ClientId == dto.ClientId);
@@ -87,7 +103,10 @@ public class ContractService : IContractService
             discountPercentage += 5;
         }
 
-        var finalPrice = basePrice * (1 - discountPercentage / 100);
+        // Opłata za dodatkowy rok wsparcia
+        var additionalPrice = dto.AdditionalSupportYears * 1000;
+
+        var finalPrice = basePrice * (1 - discountPercentage / 100m) + additionalPrice;
 
         var contract = new Contract
         {
@@ -108,39 +127,50 @@ public class ContractService : IContractService
 
     public async Task ProcessPaymentAsync(int contractId, CreatePaymentDto dto)
     {
+        // walidacja => czy istnieje podany kontrakt w bazie
         var contract = await _dbContext.Contracts
             .Include(x => x.Payments)
             .FirstOrDefaultAsync(x => x.ContractId == contractId);
 
         if (contract == null)
         {
-            throw new NotFoundException("No contract found with the given id");
+            throw new NotFoundException($"Contract with ID {contractId} not found");
         }
 
-        var client = await _dbContext.Clients.FirstOrDefaultAsync(x => x.ClientId == dto.ClientId);
+        // walidacja => czy podany klient w DTO istnieje w bazie
+        var client = await _dbContext.Clients
+            .FirstOrDefaultAsync(x => x.ClientId == dto.ClientId);
 
         if (client == null)
         {
-            throw new NotFoundException("No client found with the given id");
+            throw new NotFoundException($"Client with ID {dto.ClientId} not found");
         }
 
+        // walidacja => czy podany klient w DTO to klient podany w kontrakcie
         if (contract.ClientId != dto.ClientId)
         {
-            throw new ConflictException("Given Client ID does not match the Client ID provided in contract");
+            throw new BadRequestException("Given client ID does not match the client ID provided in contract");
         }
 
+        // walidacja => czy podany kontrakt jest już podpisany
         if (contract.IsSigned)
         {
-            throw new ConflictException("Contract is already paid and signed");
+            throw new ConflictException("This contract is already paid and signed");
         }
 
         var today = DateOnly.FromDateTime(DateTime.Now);
 
+        // Zwrot pieniędzy, jeśli minął deadline podpisania kontraktu 
         if (today > contract.Deadline)
         {
-            foreach (var p in contract.Payments.Where(p => !p.IsRefunded))
+            var paymentsToReturn = contract.Payments.Where(p => !p.IsRefunded).ToList();
+
+            if (paymentsToReturn.Any())
             {
-                p.IsRefunded = true;
+                foreach (var p in paymentsToReturn)
+                {
+                    p.IsRefunded = true;
+                }
             }
 
             await _dbContext.SaveChangesAsync();
@@ -152,13 +182,17 @@ public class ContractService : IContractService
 
         try
         {
-            var totalAmount = contract.Payments
+            var paidAmount = contract.Payments
                 .Where(x => !x.IsRefunded)
                 .Sum(x => x.Amount);
 
-            if (totalAmount + dto.Amount > contract.Price)
+            var totalAmount = paidAmount + dto.Amount;
+            var toPay = contract.Price - paidAmount;
+
+            // walidacja => czy podano poprawną wartość do zapłaty
+            if (totalAmount > contract.Price)
             {
-                throw new ConflictException("All payments must be equal to the price specified in the contract");
+                throw new ConflictException($"All payments must be equal to the price specified in the contract\nTo pay: {toPay}");
             }
 
             var payment = new Payment
@@ -172,12 +206,12 @@ public class ContractService : IContractService
             await _dbContext.Payments.AddAsync(payment);
             await _dbContext.SaveChangesAsync();
 
-            if (totalAmount + dto.Amount == contract.Price)
+            if (totalAmount == contract.Price)
             {
                 contract.IsSigned = true;
-            }
 
-            await _dbContext.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync();
+            }
 
             await transaction.CommitAsync();
         }

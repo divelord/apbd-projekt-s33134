@@ -18,6 +18,7 @@ public class ContractsController : ControllerBase
         _contractService = contractService;
     }
 
+    // POST /api/contracts
     [HttpPost]
     public async Task<IActionResult> CreateContract([FromBody] CreateContractDto dto)
     {
@@ -41,6 +42,7 @@ public class ContractsController : ControllerBase
         }
     }
 
+    // POST /api/contracts/{id}/payments
     [Route("{id:int}/payments")]
     [HttpPost]
     public async Task<IActionResult> ProcessPayment(int id, [FromBody] CreatePaymentDto dto)
@@ -54,6 +56,10 @@ public class ContractsController : ControllerBase
         catch (NotFoundException e)
         {
             return NotFound(e.Message);
+        }
+        catch (BadRequestException e)
+        {
+            return BadRequest(e.Message);
         }
         catch (ConflictException e)
         {

@@ -17,37 +17,33 @@ public class SubscriptionService : ISubscriptionService
 
     public async Task CreateSubscriptionAsync(CreateSubscriptionDto dto)
     {
-        var client = await _dbContext.Clients.FirstOrDefaultAsync(x => x.ClientId == dto.ClientId);
+        // walidacja => czy podany klient istnieje w bazie
+        var client = await _dbContext.Clients
+            .FirstOrDefaultAsync(x => x.ClientId == dto.ClientId);
 
         if (client == null)
         {
-            throw new NotFoundException("No client found with the given id");
+            throw new NotFoundException($"Client with ID {dto.ClientId} not found");
         }
 
-        var software = await _dbContext.Software.FirstOrDefaultAsync(x => x.SoftwareId == dto.SoftwareId);
+        // walidacja => czy podane oprogramowanie istnieje w bazie
+        var software = await _dbContext.Software
+            .FirstOrDefaultAsync(x => x.SoftwareId == dto.SoftwareId);
 
         if (software == null)
         {
-            throw new NotFoundException("No software found with the given id");
+            throw new NotFoundException($"Software with ID {dto.SoftwareId} not found");
         }
 
+        // walidacja => czas odnowienia w przedziale [1, 24] miesięcy
         if (dto.RenewalPeriod < 1 || dto.RenewalPeriod > 24)
         {
             throw new BadRequestException("RenewalPeriod must be between 1 and 24 months");
         }
 
-        var activeSubscription = await _dbContext.Subscriptions
-            .AnyAsync(x => x.ClientId == dto.ClientId
-                           && x.SoftwareId == dto.SoftwareId
-                           && x.IsActive);
-
-        if (activeSubscription)
-        {
-            throw new ConflictException("Client has active subscription for this software");
-        }
-
         var today = DateOnly.FromDateTime(DateTime.Now);
 
+        // walidacja => czy klient ma już podpisany kontrakt na ten produkt
         var activeContract = await _dbContext.Contracts
             .AnyAsync(x => x.ClientId == dto.ClientId
                            && x.SoftwareId == dto.SoftwareId
@@ -59,6 +55,18 @@ public class SubscriptionService : ISubscriptionService
             throw new ConflictException("Client has active contract for this software");
         }
 
+        // walidacja => czy klient ma już aktywną subskrypcję na ten produkt
+        var activeSubscription = await _dbContext.Subscriptions
+            .AnyAsync(x => x.ClientId == dto.ClientId
+                           && x.SoftwareId == dto.SoftwareId
+                           && x.IsActive);
+
+        if (activeSubscription)
+        {
+            throw new ConflictException("Client has active subscription for this software");
+        }
+
+        // Wybranie najwyższej zniżki
         var highestDiscount = await _dbContext.Discounts
             .Where(x => x.SoftwareId == dto.SoftwareId
                         && x.Offer == "Subscription"
@@ -69,6 +77,7 @@ public class SubscriptionService : ISubscriptionService
 
         var discountPercentage = highestDiscount?.Percentage ?? 0;
 
+        // Zniżka dla lojalnego klienta
         var isLoyalClient =
             await _dbContext.Contracts.AnyAsync(x => x.ClientId == dto.ClientId && x.IsSigned)
             || await _dbContext.Subscriptions.AnyAsync(x => x.ClientId == dto.ClientId);
@@ -78,7 +87,7 @@ public class SubscriptionService : ISubscriptionService
             discountPercentage += 5;
         }
 
-        var firstPaymentAmount = dto.RenewalAmount * (1 - discountPercentage / 100);
+        var firstPaymentAmount = dto.RenewalAmount * (1 - discountPercentage / 100m);
 
         var periodStart = today;
         var periodEnd = today.AddMonths(dto.RenewalPeriod);
@@ -124,6 +133,7 @@ public class SubscriptionService : ISubscriptionService
 
     public async Task ProcessRenewalAsync(int subscriptionId, CreateSubscriptionRenewalDto dto)
     {
+        // walidacja => czy istnieje podana subskrypcja w bazie
         var subscription = await _dbContext.Subscriptions
             .Include(x => x.Renewals)
             .FirstOrDefaultAsync(x => x.SubscriptionId == subscriptionId);
@@ -133,25 +143,24 @@ public class SubscriptionService : ISubscriptionService
             throw new NotFoundException("No Subscription found with the given id");
         }
 
-        var client = await _dbContext.Clients.FirstOrDefaultAsync(x => x.ClientId == dto.ClientId);
+        // walidacja => czy podany klient w DTO istnieje w bazie
+        var client = await _dbContext.Clients
+            .FirstOrDefaultAsync(x => x.ClientId == dto.ClientId);
 
         if (client == null)
         {
-            throw new NotFoundException("No client found with the given id");
+            throw new NotFoundException($"Client with ID {dto.ClientId} not found");
         }
 
+        // walidacja => czy podany klient w DTO to klient związany z subskrypcją
         if (subscription.ClientId != dto.ClientId)
         {
-            throw new ConflictException("Given client id does not match the client id provided in subscription");
-        }
-
-        if (!subscription.IsActive)
-        {
-            throw new ConflictException("Subscription is not active");
+            throw new BadRequestException("Given client ID does not match the client ID provided in subscription");
         }
 
         var today = DateOnly.FromDateTime(DateTime.Now);
 
+        // walidacja => czy subskrypcja nie wygasła z powodu braków płatności 
         var lastRenewal = subscription.Renewals
             .OrderByDescending(x => x.PeriodEnd)
             .FirstOrDefault();
@@ -167,9 +176,17 @@ public class SubscriptionService : ISubscriptionService
             throw new ConflictException("Renewal has been cancelled due to missed renewal deadline");
         }
 
+        // walidacja => czy podana subskrypcja jest nie aktywna
+        if (!subscription.IsActive)
+        {
+            throw new ConflictException("Subscription is not active");
+        }
+
+        // ramy czasowe do kolejnego okresu rozliczeniowego
         var nextPeriodStart = currentPeriodEnd;
         var nextPeriodEnd = nextPeriodStart.AddMonths(subscription.RenewalPeriod);
 
+        // walidacja => czy kolejny okres rozliczeniowy nie został już opłacony
         var alreadyPaid = subscription.Renewals
             .Any(x => x.PeriodStart == nextPeriodStart && x.PeriodEnd == nextPeriodEnd);
 
@@ -178,35 +195,35 @@ public class SubscriptionService : ISubscriptionService
             throw new ConflictException("Subscription is already paid");
         }
 
-        var renewalAmount = subscription.RenewalAmount * 0.95m;
+        // Sprawdzenie, czy kolejne płatności mają obsługiwać zniżkę lojalnościowego klienta
+        var isLoyalClient =
+            await _dbContext.Contracts.AnyAsync(x => x.ClientId == dto.ClientId && x.IsSigned)
+            || await _dbContext.Subscriptions.AnyAsync(x => x.ClientId == dto.ClientId
+                                                            && x.SubscriptionId != subscription.SubscriptionId);
 
+        var renewalAmount = subscription.RenewalAmount;
+
+        if (isLoyalClient)
+        {
+            renewalAmount *= 0.95m;
+        }
+
+        // walidacja => czy podano poprawną wartość do zapłaty
         if (dto.Amount != renewalAmount)
         {
-            throw new BadRequestException("All payments must be equal to the price of subscription");
+            throw new BadRequestException($"All payments must be equal to the price of subscription\nTo pay: {renewalAmount}");
         }
 
-        var transaction = await _dbContext.Database.BeginTransactionAsync();
-
-        try
+        var renewal = new SubscriptionRenewal
         {
-            var renewal = new SubscriptionRenewal
-            {
-                SubscriptionId = subscription.SubscriptionId,
-                AmountPaid = dto.Amount,
-                PaymentDate = today,
-                PeriodStart = nextPeriodStart,
-                PeriodEnd = nextPeriodEnd,
-            };
+            SubscriptionId = subscription.SubscriptionId,
+            AmountPaid = dto.Amount,
+            PaymentDate = today,
+            PeriodStart = nextPeriodStart,
+            PeriodEnd = nextPeriodEnd,
+        };
 
-            await _dbContext.SubscriptionRenewals.AddAsync(renewal);
-            await _dbContext.SaveChangesAsync();
-
-            await transaction.CommitAsync();
-        }
-        catch (Exception)
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+        await _dbContext.SubscriptionRenewals.AddAsync(renewal);
+        await _dbContext.SaveChangesAsync();
     }
 }

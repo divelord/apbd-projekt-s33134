@@ -18,9 +18,10 @@ public class ClientsController : ControllerBase
         _clientService = clientService;
     }
 
+    // POST /api/clients/individual
     [Route("individual")]
     [HttpPost]
-    public async Task<IActionResult> CreateIndividualClient(CreateIndividualClientDto dto)
+    public async Task<IActionResult> CreateIndividualClient([FromBody] CreateIndividualClientDto dto)
     {
         try
         {
@@ -34,9 +35,10 @@ public class ClientsController : ControllerBase
         }
     }
 
+    // POST /api/clients/company
     [Route("company")]
     [HttpPost]
-    public async Task<IActionResult> CreateCompanyClient(CreateCompanyClientDto dto)
+    public async Task<IActionResult> CreateCompanyClient([FromBody] CreateCompanyClientDto dto)
     {
         try
         {
@@ -50,10 +52,11 @@ public class ClientsController : ControllerBase
         }
     }
 
+    // PUT /api/clients/individual/{id}
     [Route("individual/{id:int}")]
     [HttpPut]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> UpdateIndividualClient(int id, UpdateIndividualClientDto dto)
+    public async Task<IActionResult> UpdateIndividualClient(int id, [FromBody] UpdateIndividualClientDto dto)
     {
         try
         {
@@ -67,10 +70,11 @@ public class ClientsController : ControllerBase
         }
     }
 
+    // PUT /api/clients/company/{id}
     [Route("company/{id:int}")]
     [HttpPut]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> UpdateCompanyClient(int id, UpdateCompanyClientDto dto)
+    public async Task<IActionResult> UpdateCompanyClient(int id, [FromBody] UpdateCompanyClientDto dto)
     {
         try
         {
@@ -84,6 +88,7 @@ public class ClientsController : ControllerBase
         }
     }
 
+    // DELETE /api/clients/individual/{id}
     [Route("individual/{id:int}")]
     [HttpDelete]
     [Authorize(Roles = "Admin")]

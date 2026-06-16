@@ -18,6 +18,7 @@ public class RevenueController : ControllerBase
         _revenueService = revenueService;
     }
 
+    // GET /api/revenue/current
     [Route("current")]
     [HttpGet]
     public async Task<IActionResult> GetCurrentRevenue([FromQuery] GetRevenueDto dto)
@@ -28,12 +29,17 @@ public class RevenueController : ControllerBase
 
             return Ok(revenue);
         }
+        catch (NotFoundException e)
+        {
+            return NotFound(e.Message);
+        }
         catch (Exception e)
         {
             return BadRequest(e.Message);
         }
     }
 
+    // GET /api/revenue/expected
     [Route("expected")]
     [HttpGet]
     public async Task<IActionResult> GetExpectedRevenue([FromQuery] GetRevenueDto dto)
@@ -43,6 +49,10 @@ public class RevenueController : ControllerBase
             var revenue = await _revenueService.GetExpectedRevenueAsync(dto.SoftwareId, dto.Currency);
 
             return Ok(revenue);
+        }
+        catch (NotFoundException e)
+        {
+            return NotFound(e.Message);
         }
         catch (Exception e)
         {

@@ -1,6 +1,5 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -37,6 +36,13 @@ public class AuthController : ControllerBase
             return Unauthorized("Invalid login or password");
         }
 
+        var token = GenerateJwtToken(employee);
+
+        return Ok(token);
+    }
+
+    private string GenerateJwtToken(Employee employee)
+    {
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, employee.EmployeeId.ToString()),
@@ -48,13 +54,13 @@ public class AuthController : ControllerBase
             Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var tokens = new JwtSecurityToken(
+        var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],
             audience: _configuration["Jwt:Issuer"],
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(15),
             signingCredentials: creds);
 
-        return Ok(new { Token = new JwtSecurityTokenHandler().WriteToken(tokens) });
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
